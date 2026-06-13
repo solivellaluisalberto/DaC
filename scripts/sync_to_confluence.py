@@ -347,6 +347,12 @@ class ConfluenceSync:
         # Resolver confluence_id si existe en frontmatter
         confluence_id = metadata.get("confluence_id")
 
+        # Resolver parent_id si existe en frontmatter (sobrescribe el heredado)
+        frontmatter_parent_id = metadata.get("parent_id")
+        if frontmatter_parent_id:
+            parent_id = int(frontmatter_parent_id)
+            print(f"[INFO] Usando parent_id '{parent_id}' desde frontmatter.")
+
         html_content = self._md_to_html(file_path)
         print(f"[INFO] Convirtiendo a HTML ({len(html_content)} chars)...")
 

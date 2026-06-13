@@ -1,46 +1,46 @@
 # confluence-sync
 
-Docker image que sincroniza archivos Markdown con **Confluence** como páginas wiki.
+Docker image that syncs Markdown files with **Confluence** as wiki pages.
 
-- **Soporta** archivos individuales y directorios completos (estructura jerárquica).
-- **Compatible** con Confluence Cloud y Confluence Server/Data Center.
-- **Multiplataforma**: Bitbucket Pipelines, GitHub Actions, GitLab CI.
-
----
-
-## Qué hace
-
-Cuando ejecutas esta imagen Docker, lee los archivos `.md` de tu repo, los convierte a HTML y los sincroniza con Confluence:
-
-- **Archivos individuales** → se crean/actualizan como páginas.
-- **Directorios** → se crea la jerarquía de carpetas en Confluence (cada carpeta es una página padre, cada archivo `.md` es una página hija).
-- **Frontmatter YAML** → soporta `page_title` (título personalizado) y `confluence_id` (ID de página existente para actualizar).
-- **Rate limiting** → reintentos automáticos con backoff exponencial ante HTTP 429.
+- Supports **individual files** and **full directory hierarchies**.
+- Compatible with **Confluence Cloud** and **Confluence Server/Data Center**.
+- Multi-platform: **Bitbucket Pipelines**, **GitHub Actions**, **GitLab CI**.
 
 ---
 
-## Variables de entorno
+## What it does
 
-### Requeridas
+When you run this Docker image, it reads the `.md` files from your repository, converts them to HTML, and syncs them with Confluence:
 
-| Variable | Descripción | Ejemplo |
+- **Individual files** → creates or updates them as Confluence pages.
+- **Directories** → builds the full folder hierarchy in Confluence (each folder becomes a parent page, each `.md` file becomes a child page).
+- **YAML frontmatter** → supports `page_title` (custom title) and `confluence_id` (update a specific existing page by ID).
+- **Rate limiting** → automatic retries with exponential backoff on HTTP 429.
+
+---
+
+## Environment Variables
+
+### Required
+
+| Variable | Description | Example |
 |----------|-------------|---------|
-| `CONFLUENCE_URL` | URL base de Confluence | `https://miempresa.atlassian.net/wiki` |
-| `CONFLUENCE_USER` | Email (Cloud) o usuario (Server) | `usuario@empresa.com` |
-| `CONFLUENCE_API_TOKEN` | API Token (Cloud) o password (Server) | `ATBB...` |
-| `CONFLUENCE_SPACE_KEY` | Clave del espacio | `PROY`, `DOCS`, `TEAM` |
-| `FILES` | Archivos/directorios a sincronizar (separados por espacio) | `README.md docs/ manual.md` |
+| `CONFLUENCE_URL` | Confluence base URL | `https://mycompany.atlassian.net/wiki` |
+| `CONFLUENCE_USER` | Email (Cloud) or username (Server) | `user@company.com` |
+| `CONFLUENCE_API_TOKEN` | API Token (Cloud) or password (Server) | `ATBB...` |
+| `CONFLUENCE_SPACE_KEY` | Confluence space key | `PROJ`, `DOCS`, `TEAM` |
+| `FILES` | Files or directories to sync (space-separated) | `README.md docs/ manual.md` |
 
-### Opcionales
+### Optional
 
-| Variable | Descripción | Default |
+| Variable | Description | Default |
 |----------|-------------|---------|
-| `CONFLUENCE_PARENT_ID` | ID de la página padre raíz en Confluence | — |
-| `DRY_RUN` | `true` para simular sin publicar cambios | `false` |
+| `CONFLUENCE_PARENT_ID` | Root parent page ID in Confluence | — |
+| `DRY_RUN` | `true` to simulate without publishing changes | `false` |
 
 ---
 
-## Uso por plataforma
+## Platform Usage
 
 ### Bitbucket Pipelines
 
@@ -49,16 +49,16 @@ pipelines:
   branches:
     main:
       - step:
-          name: Sync docs a Confluence
+          name: Sync docs to Confluence
           script:
             - pipe: docker://solivellaluis/confluence-sync:latest
               variables:
                 CONFLUENCE_URL: $CONFLUENCE_URL
                 CONFLUENCE_USER: $CONFLUENCE_USER
                 CONFLUENCE_API_TOKEN: $CONFLUENCE_API_TOKEN
-                CONFLUENCE_SPACE_KEY: "PROY"
+                CONFLUENCE_SPACE_KEY: "PROJ"
                 CONFLUENCE_PARENT_ID: "123456"
-                FILES: "README.md docs/ manual-usuario.md"
+                FILES: "README.md docs/ manual.md"
                 DRY_RUN: "false"
 ```
 
@@ -83,9 +83,9 @@ jobs:
           CONFLUENCE_URL: ${{ secrets.CONFLUENCE_URL }}
           CONFLUENCE_USER: ${{ secrets.CONFLUENCE_USER }}
           CONFLUENCE_API_TOKEN: ${{ secrets.CONFLUENCE_API_TOKEN }}
-          CONFLUENCE_SPACE_KEY: "PROY"
+          CONFLUENCE_SPACE_KEY: "PROJ"
           CONFLUENCE_PARENT_ID: "123456"
-          FILES: "README.md docs/ manual-usuario.md"
+          FILES: "README.md docs/ manual.md"
           DRY_RUN: "false"
 ```
 
@@ -100,9 +100,9 @@ sync-confluence:
     CONFLUENCE_URL: $CONFLUENCE_URL
     CONFLUENCE_USER: $CONFLUENCE_USER
     CONFLUENCE_API_TOKEN: $CONFLUENCE_API_TOKEN
-    CONFLUENCE_SPACE_KEY: "PROY"
+    CONFLUENCE_SPACE_KEY: "PROJ"
     CONFLUENCE_PARENT_ID: "123456"
-    FILES: "README.md docs/ manual-usuario.md"
+    FILES: "README.md docs/ manual.md"
     DRY_RUN: "false"
   script:
     - /pipe.sh
@@ -112,39 +112,41 @@ sync-confluence:
 
 ---
 
-## Frontmatter en los archivos Markdown
+## Markdown Frontmatter
 
-Puedes controlar la sincronización de cada archivo añadiendo un bloque YAML al inicio del `.md`:
+You can control how each file is synced by adding a YAML frontmatter block at the top of the `.md` file:
 
 ```markdown
 ---
-page_title: "Título personalizado en Confluence"
+page_title: "Custom title in Confluence"
 confluence_id: "589829"
+parent_id: "123456"
 ---
 
-# Tu contenido Markdown...
+# Your Markdown content...
 ```
 
-| Campo | Uso |
-|-------|-----|
-| `page_title` | Título de la página en Confluence (si no se indica, usa el primer `# H1`) |
-| `confluence_id` | Si existe, actualiza la página con ese ID directamente (sin buscar por título) |
+| Field | Purpose |
+|-------|---------|
+| `page_title` | Page title in Confluence (if not set, uses the first `# H1`) |
+| `confluence_id` | If present, updates the page with that exact ID (skips search by title) |
+| `parent_id` | If present, overrides the inherited parent page ID for this specific file |
 
 ---
 
-## Build local
+## Local Build
 
 ```bash
-# Clonar el repo y construir la imagen
+# Build the image locally
 docker build -t solivellaluis/confluence-sync:local .
 
-# Ejecutar localmente (simulado con DRY_RUN)
+# Run locally with DRY_RUN to test
 docker run -it --rm \
   -v $(pwd):/workspace \
-  -e CONFLUENCE_URL="https://tuempresa.atlassian.net/wiki" \
-  -e CONFLUENCE_USER="tu@email.com" \
+  -e CONFLUENCE_URL="https://yourcompany.atlassian.net/wiki" \
+  -e CONFLUENCE_USER="your@email.com" \
   -e CONFLUENCE_API_TOKEN="ATBB..." \
-  -e CONFLUENCE_SPACE_KEY="PROY" \
+  -e CONFLUENCE_SPACE_KEY="PROJ" \
   -e FILES="README.md" \
   -e DRY_RUN="true" \
   solivellaluis/confluence-sync:local
@@ -152,50 +154,39 @@ docker run -it --rm \
 
 ---
 
-## Publicar una nueva versión
+## Contributing
 
-Este repo utiliza **GitHub Actions** para automatizar el build y push de la imagen Docker:
-
-1. Configura dos secrets en el repositorio de GitHub:
-   - **Settings → Secrets and variables → Actions → New repository secret**
-   - `DOCKERHUB_USERNAME` → `solivellaluis`
-   - `DOCKERHUB_TOKEN` → tu Access Token de Docker Hub
-
-2. Cualquier **push a `main`** compila y publica automáticamente:
-   - `solivellaluis/confluence-sync:latest`
-   - `solivellaluis/confluence-sync:${GITHUB_RUN_NUMBER}` (número incremental para rollback)
-
-3. En **PRs o ramas que no sean `main`**, la imagen se compila pero **no se publica** (validación).
+Contributions are welcome. If you want to improve the script, add new features, or fix a bug, feel free to open a pull request.
 
 ---
 
-## Estructura del repositorio
+## Repository Structure
 
 ```
 .
 ├── .github/
 │   └── workflows/
-│       └── docker-publish.yml      # GitHub Actions: build + push a Docker Hub
+│       └── docker-publish.yml      # GitHub Actions CI/CD
 ├── scripts/
-│   └── sync_to_confluence.py      # Script principal (Python)
+│   └── sync_to_confluence.py      # Main Python script
 ├── .dockerignore
-├── Dockerfile                     # Definición de la imagen
-├── pipe.sh                        # Entrypoint del contenedor
-├── pipe.yml                       # Metadata del pipe (para Bitbucket)
-├── requirements.txt               # Dependencias Python
-└── README.md                      # Este archivo
+├── Dockerfile                     # Docker image definition
+├── pipe.sh                        # Container entrypoint
+├── pipe.yml                       # Pipe metadata (Bitbucket)
+├── requirements.txt               # Python dependencies
+└── README.md                      # This file
 ```
 
-| Archivo | Descripción |
-|---------|-------------|
-| `Dockerfile` | Imagen basada en `python:3.11-slim` con las dependencias y el script |
-| `pipe.sh` | Entrypoint que detecta el workspace (Bitbucket/GitLab/GitHub) y ejecuta el script |
-| `sync_to_confluence.py` | Script de sincronización: convierte Markdown a HTML, crea/actualiza páginas en Confluence |
-| `pipe.yml` | Metadata del pipe para Bitbucket Pipelines (documentación de variables) |
-| `docker-publish.yml` | Workflow de GitHub Actions que compila y publica la imagen en Docker Hub |
+| File | Description |
+|------|-------------|
+| `Dockerfile` | `python:3.11-slim` image with dependencies and the sync script |
+| `pipe.sh` | Entrypoint that detects the workspace (Bitbucket/GitLab/GitHub) and runs the script |
+| `sync_to_confluence.py` | Main sync script: converts Markdown to HTML, creates/updates Confluence pages |
+| `pipe.yml` | Pipe metadata for Bitbucket Pipelines (variable documentation) |
+| `docker-publish.yml` | GitHub Actions workflow that builds and publishes the image to Docker Hub |
 
 ---
 
-## Licencia
+## License
 
 MIT

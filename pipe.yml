@@ -2,9 +2,9 @@ name: Confluence Sync
 image: solivellaluis/confluence-sync
 version: 1.0.0
 description: >
-  Sincroniza archivos Markdown con Confluence como pages.
-  Soporta archivos individuales y directorios completos (estructura jerárquica).
-  Compatible con Confluence Cloud y Data Center/Server.
+  Syncs Markdown files with Confluence as pages.
+  Supports individual files and full directory hierarchies.
+  Compatible with Confluence Cloud and Data Center/Server.
 
 tags:
   - confluence
@@ -15,47 +15,47 @@ tags:
 variables:
   - name: CONFLUENCE_URL
     description: >
-      URL base de Confluence.
-      Ejemplo Cloud: https://miempresa.atlassian.net/wiki
-      Ejemplo Server: https://confluence.miempresa.com
+      Confluence base URL.
+      Cloud example: https://mycompany.atlassian.net/wiki
+      Server example: https://confluence.mycompany.com
     required: true
 
   - name: CONFLUENCE_USER
     description: >
-      Email del usuario para Confluence Cloud,
-      o nombre de usuario para Confluence Server/Data Center.
+      User email for Confluence Cloud,
+      or username for Confluence Server/Data Center.
     required: true
 
   - name: CONFLUENCE_API_TOKEN
     description: >
-      API Token de Confluence Cloud (generado en id.atlassian.com)
-      o contraseña para Confluence Server. Usar siempre como variable secreta.
+      Confluence Cloud API Token (generated at id.atlassian.com)
+      or password for Confluence Server. Always use as a secret variable.
     required: true
     secret: true
 
   - name: CONFLUENCE_SPACE_KEY
     description: >
-      Clave del espacio de Confluence donde se publicarán los documentos.
-      Ejemplo: PROY, DOCS, TEAM
+      Confluence space key where the documents will be published.
+      Example: PROJ, DOCS, TEAM
     required: true
 
   - name: CONFLUENCE_PARENT_ID
     description: >
-      ID de la página padre raíz en Confluence.
-      Todos los archivos y carpetas sincronizados colgarán de esta página.
-      Se puede obtener desde la URL de la página en Confluence.
+      Root parent page ID in Confluence.
+      All synced files and folders will be created under this page.
+      Can be obtained from the page URL in Confluence.
     required: false
 
   - name: FILES
     description: >
-      Lista de archivos .md y/o directorios a sincronizar, separados por espacios.
-      Los directorios se procesan de forma recursiva, creando la jerarquía de páginas.
-      Ejemplo: "README.md docs/ manual-usuario.md api-referencia.md"
+      List of .md files and/or directories to sync, space-separated.
+      Directories are processed recursively, building the page hierarchy.
+      Example: "README.md docs/ manual.md api-reference.md"
     required: true
 
   - name: DRY_RUN
     description: >
-      Si se establece en 'true', simula la ejecución sin crear ni actualizar
-      ninguna página en Confluence. Útil para validar configuración.
+      If set to 'true', simulates the execution without creating or updating
+      any Confluence page. Useful for validating configuration.
     required: false
     default: "false"
