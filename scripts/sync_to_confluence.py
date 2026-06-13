@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
 """
-Script para sincronizar archivos o carpetas Markdown con Confluence.
+Script to sync Markdown files or folders with Confluence.
 
-Soporta Confluence Cloud y Data Center/Server mediante variables de entorno.
+Supports Confluence Cloud and Data Center/Server via environment variables.
 
-Si se pasa una carpeta, se crea toda la estructura jerárquica en Confluence:
-- Cada carpeta se convierte en una página de Confluence (página padre).
-- Cada archivo .md se sincroniza como página hija de su carpeta contenedora.
+If a folder is passed, the entire hierarchical structure is created in Confluence:
+- Each folder becomes a Confluence page (parent page).
+- Each .md file is synced as a child page of its containing folder.
 
-Si se pasa un archivo, se sincroniza directamente como hasta ahora.
+If a file is passed, it is synced directly as before.
 
-El título de la página se extrae automáticamente del primer encabezado nivel 1 (#)
-del Markdown o del campo `page_title` en el frontmatter YAML.
+The page title is automatically extracted from the first level 1 heading (#)
+in the Markdown or from the `page_title` field in the YAML frontmatter.
 
-Variables de entorno requeridas:
-    CONFLUENCE_URL        - URL base de Confluence (ej: https://miempresa.atlassian.net/wiki)
-    CONFLUENCE_USER       - Email del usuario (Cloud) o nombre de usuario (Server)
-    CONFLUENCE_API_TOKEN  - API Token (Cloud) o password (Server)
-    CONFLUENCE_SPACE_KEY  - Clave del espacio (ej: PROY)
+Required environment variables:
+    CONFLUENCE_URL        - Confluence base URL (e.g., https://mycompany.atlassian.net/wiki)
+    CONFLUENCE_USER       - User email (Cloud) or username (Server)
+    CONFLUENCE_API_TOKEN  - API Token (Cloud) or password (Server)
+    CONFLUENCE_SPACE_KEY  - Space key (e.g., PROJ)
 
-Opcional:
-    CONFLUENCE_PARENT_ID  - ID de la página padre raíz (para carpetas y archivos sin padre definido)
+Optional:
+    CONFLUENCE_PARENT_ID  - Root parent page ID (for folders and files without a defined parent)
 """
 
 import argparse
@@ -43,7 +43,7 @@ class ConfluenceSync:
         self.space_key = os.environ.get("CONFLUENCE_SPACE_KEY", "")
         self.parent_id = os.environ.get("CONFLUENCE_PARENT_ID", "")
         self.dry_run = dry_run
-        self._folder_cache = {}  # ruta_relativa -> confluence_id
+        self._folder_cache = {}  # relative_path -> confluence_id
 
         self._validate_config()
         self.session = requests.Session()
@@ -51,10 +51,10 @@ class ConfluenceSync:
             "Content-Type": "application/json",
             "Accept": "application/json"
         })
-        # Basic Auth nativo de requests
+        # requests native Basic Auth
         self.session.auth = (self.user, self.token)
 
-        # Verificar conectividad antes de continuar
+        # Verify connectivity before proceeding
         self._verify_connection()
 
     def _validate_config(self):
@@ -63,14 +63,14 @@ class ConfluenceSync:
             if not os.environ.get(key):
                 missing.append(key)
         if missing:
-            print(f"[ERROR] Faltan variables de entorno: {', '.join(missing)}")
+            print(f"[ERROR] Missing environment variables: {', '.join(missing)}")
             sys.exit(1)
 
     def _parse_frontmatter(self, md_file):
-        """Lee y parsea el frontmatter YAML del archivo Markdown.
+        """Reads and parses the YAML frontmatter from the Markdown file.
         
-        Devuelve (metadata_dict, resto_del_contenido).
-        Si no hay frontmatter, devuelve ({}, contenido_completo).
+        Returns (metadata_dict, rest_of_content).
+        If no frontmatter, returns ({}, full_content).
         """
         with open(md_file, "r", encoding="utf-8") as f:
             content = f.read()
@@ -82,76 +82,76 @@ class ConfluenceSync:
                     metadata = yaml.safe_load(parts[1])
                     return metadata if metadata else {}, parts[2].strip()
                 except yaml.YAMLError as e:
-                    print(f"[WARNING] Error parseando frontmatter YAML: {e}")
+                    print(f"[WARNING] Error parsing YAML frontmatter: {e}")
                     return {}, content
         return {}, content
 
     def _extract_title(self, md_file):
-        """Extrae el título del frontmatter o del primer encabezado nivel 1 (#)."""
+        """Extracts the title from the frontmatter or the first level 1 heading (#)."""
         metadata, _ = self._parse_frontmatter(md_file)
         
-        # Prioridad 1: page_title en frontmatter
+        # Priority 1: page_title in frontmatter
         if metadata.get("page_title"):
             return metadata["page_title"].strip()
         
-        # Prioridad 2: primer encabezado nivel 1
+        # Priority 2: first level 1 heading
         with open(md_file, "r", encoding="utf-8") as f:
             for line in f:
                 stripped = line.strip()
                 if stripped.startswith("# "):
                     return stripped[2:].strip()
         
-        print("[WARNING] No se encontró un título con '# ' en el archivo. Usando fallback.")
-        return "Documentación sin título"
+        print("[WARNING] No title with '# ' found in the file. Using fallback.")
+        return "Untitled document"
 
     def _verify_connection(self):
-        """Verifica que la URL y el espacio de Confluence sean válidos."""
-        print(f"[DEBUG] URL configurada: {self.url}")
-        print(f"[DEBUG] Usuario: {self.user}")
+        """Verifies that the Confluence URL and space are valid."""
+        print(f"[DEBUG] URL configured: {self.url}")
+        print(f"[DEBUG] User: {self.user}")
         print(f"[DEBUG] Space Key: {self.space_key}")
         
-        # Verificar que la URL parece correcta
+        # Verify that the URL looks correct
         if not self.url.rstrip("/").endswith("/wiki"):
-            print(f"[WARNING] La URL '{self.url}' no termina en '/wiki'. Para Confluence Cloud, la URL suele ser 'https://<dominio>.atlassian.net/wiki'")
+            print(f"[WARNING] The URL '{self.url}' does not end with '/wiki'. For Confluence Cloud, the URL is usually 'https://<domain>.atlassian.net/wiki'")
         
-        # Probar conectividad básica
+        # Test basic connectivity
         test_url = urljoin(self.url, "rest/api/space")
-        print(f"[DEBUG] Probando conexión a: {test_url}")
+        print(f"[DEBUG] Testing connection to: {test_url}")
         try:
             resp = self.session.get(test_url, timeout=10)
             print(f"[DEBUG] Status code: {resp.status_code}")
-            print(f"[DEBUG] Respuesta: {resp.text[:500]}")
+            print(f"[DEBUG] Response: {resp.text[:500]}")
             if resp.status_code == 404:
-                print(f"[ERROR] No se puede conectar a Confluence en '{self.url}'. Verifica que la URL sea correcta.")
-                print(f"[ERROR] Para Confluence Cloud, la URL debe ser algo como: https://<tu-dominio>.atlassian.net/wiki")
+                print(f"[ERROR] Cannot connect to Confluence at '{self.url}'. Verify that the URL is correct.")
+                print(f"[ERROR] For Confluence Cloud, the URL should be something like: https://<your-domain>.atlassian.net/wiki")
                 sys.exit(1)
             resp.raise_for_status()
         except requests.exceptions.RequestException as e:
-            print(f"[ERROR] No se puede conectar a Confluence: {e}")
-            print(f"[ERROR] Verifica que la URL '{self.url}' sea correcta y que tengas acceso.")
+            print(f"[ERROR] Cannot connect to Confluence: {e}")
+            print(f"[ERROR] Verify that the URL '{self.url}' is correct and that you have access.")
             sys.exit(1)
         
-        # Verificar que el espacio existe
+        # Verify that the space exists
         space_url = urljoin(self.url, f"rest/api/space/{self.space_key}")
-        print(f"[DEBUG] Verificando espacio: {space_url}")
+        print(f"[DEBUG] Verifying space: {space_url}")
         resp = self.session.get(space_url)
-        print(f"[DEBUG] Status code del espacio: {resp.status_code}")
-        print(f"[DEBUG] Respuesta del espacio: {resp.text[:500]}")
+        print(f"[DEBUG] Space status code: {resp.status_code}")
+        print(f"[DEBUG] Space response: {resp.text[:500]}")
         if resp.status_code == 404:
-            print(f"[ERROR] El espacio '{self.space_key}' no existe o no tienes permisos para verlo.")
-            print(f"[ERROR] Verifica que el espacio esté correctamente escrito en la variable CONFLUENCE_SPACE_KEY.")
+            print(f"[ERROR] The space '{self.space_key}' does not exist or you don't have permission to view it.")
+            print(f"[ERROR] Verify that the space is correctly written in the CONFLUENCE_SPACE_KEY variable.")
             sys.exit(1)
         resp.raise_for_status()
-        print(f"[INFO] Conexión a Confluence OK. Espacio '{self.space_key}' verificado.")
+        print(f"[INFO] Confluence connection OK. Space '{self.space_key}' verified.")
 
     def _convert_code_blocks(self, html_content):
-        """Convierte bloques <pre><code> a la macro 'code' de Confluence."""
+        """Converts <pre><code> blocks to Confluence 'code' macro."""
         def replace_code(match):
             lang = match.group(1) or ""
             code_text = match.group(2)
-            # Desescapar entidades HTML para que se vean bien en Confluence
+            # Unescape HTML entities so they look good in Confluence
             code_text = html.unescape(code_text)
-            # Escapar el delimitador CDATA si aparece en el código
+            # Escape the CDATA delimiter if it appears in the code
             code_text = code_text.replace("]]>", "]]]]><![CDATA[>")
             return (
                 f'<ac:structured-macro ac:name="code">'
@@ -160,38 +160,38 @@ class ConfluenceSync:
                 f'</ac:structured-macro>'
             )
         
-        # Reemplaza todos los bloques <pre><code class="language-xxx">...</code></pre>
+        # Replace all <pre><code class="language-xxx">...</code></pre> blocks
         pattern = r'<pre><code(?: class="language-([^"]*)")?>(.*?)</code></pre>'
         return re.sub(pattern, replace_code, html_content, flags=re.DOTALL)
 
     def _md_to_html(self, md_file):
         with open(md_file, "r", encoding="utf-8") as f:
             text = f.read()
-        # Convertir markdown a HTML
+        # Convert markdown to HTML
         html_content = markdown.markdown(text, extensions=["tables", "fenced_code", "toc"])
-        # Convertir bloques de código a macro Confluence
+        # Convert code blocks to Confluence macro
         html_content = self._convert_code_blocks(html_content)
-        # Confluence requiere que el body esté envuelto en un macro storage si es XHTML
+        # Confluence requires the body to be wrapped in a storage macro if it's XHTML
         return f"<div>{html_content}</div>"
 
     def _request_with_retry(self, method, url, **kwargs):
-        """Ejecuta una petición HTTP con reintentos automáticos ante 429 (rate limit)."""
+        """Executes an HTTP request with automatic retries on 429 (rate limit)."""
         max_retries = 3
         for attempt in range(1, max_retries + 1):
             if self.dry_run:
                 return None
             resp = self.session.request(method, url, **kwargs)
             if resp.status_code == 429:
-                wait = 2 ** attempt  # backoff exponencial: 2, 4, 8 seg
-                print(f"[WARNING] Rate limit (429). Esperando {wait}s... (intento {attempt}/{max_retries})")
+                wait = 2 ** attempt  # exponential backoff: 2, 4, 8 sec
+                print(f"[WARNING] Rate limit (429). Waiting {wait}s... (attempt {attempt}/{max_retries})")
                 time.sleep(wait)
                 continue
             resp.raise_for_status()
             return resp
-        raise requests.exceptions.HTTPError("Rate limit persistente después de 3 reintentos.")
+        raise requests.exceptions.HTTPError("Persistent rate limit after 3 retries.")
 
     def _find_page(self, title=None, ancestor_id=None):
-        """Busca una página por título en el espacio. Opcionalmente filtra por ancestro."""
+        """Searches for a page by title in the space. Optionally filters by ancestor."""
         search_url = urljoin(self.url, "rest/api/content")
         params = {
             "type": "page",
@@ -205,7 +205,7 @@ class ConfluenceSync:
         if not results:
             return None
         if ancestor_id and len(results) > 1:
-            # Desambiguar: preferir página que cuelga del ancestor_id
+            # Disambiguate: prefer page that hangs from ancestor_id
             for r in results:
                 ancestors = r.get("ancestors", [])
                 if any(str(a.get("id")) == str(ancestor_id) for a in ancestors):
@@ -213,9 +213,9 @@ class ConfluenceSync:
         return results[0]
 
     def _create_page(self, html_content, title=None, parent_id=None):
-        """Crea una nueva página en Confluence."""
+        """Creates a new page in Confluence."""
         if self.dry_run:
-            print(f"[DRY-RUN] Crearía página: '{title}'")
+            print(f"[DRY-RUN] Would create page: '{title}'")
             return {"id": "dry-run", "_links": {"base": "", "webui": ""}}
         create_url = urljoin(self.url, "rest/api/content")
         payload = {
@@ -236,9 +236,9 @@ class ConfluenceSync:
         return resp.json()
 
     def _update_page(self, page, html_content, title=None, parent_id=None):
-        """Actualiza una página existente en Confluence."""
+        """Updates an existing page in Confluence."""
         if self.dry_run:
-            print(f"[DRY-RUN] Actualizaría página: '{title}' (ID: {page['id']})")
+            print(f"[DRY-RUN] Would update page: '{title}' (ID: {page['id']})")
             return {"id": page["id"], "_links": {"base": "", "webui": ""}}
         page_id = page["id"]
         version = page["version"]["number"]
@@ -261,49 +261,49 @@ class ConfluenceSync:
         return resp.json()
 
     def _find_or_create_folder_page(self, title, parent_id=None):
-        """Busca una página por título. Si existe, devuelve el ID. Si no, la crea como carpeta."""
-        # Revisar cache primero
+        """Searches for a page by title. If it exists, returns the ID. If not, creates it as a folder."""
+        # Check cache first
         cache_key = f"{parent_id or 'root'}::{title}"
         if cache_key in self._folder_cache:
             cached_id = self._folder_cache[cache_key]
-            print(f"[INFO] Carpeta encontrada en cache: '{title}' (ID: {cached_id})")
+            print(f"[INFO] Folder found in cache: '{title}' (ID: {cached_id})")
             return cached_id
 
         page = self._find_page(title=title, ancestor_id=parent_id)
         if page:
-            print(f"[INFO] Carpeta existente encontrada: '{title}' (ID: {page['id']})")
+            print(f"[INFO] Existing folder found: '{title}' (ID: {page['id']})")
             self._folder_cache[cache_key] = page["id"]
             return page["id"]
 
-        # Crear nueva página (carpeta)
-        print(f"[INFO] Creando carpeta: '{title}'...")
-        body = f'<div><p>Carpeta auto-generada: <strong>{title}</strong>.</p></div>'
+        # Create new page (folder)
+        print(f"[INFO] Creating folder: '{title}'...")
+        body = f'<div><p>Auto-generated folder: <strong>{title}</strong>.</p></div>'
         result = self._create_page(html_content=body, title=title, parent_id=parent_id)
-        print(f"[SUCCESS] Carpeta creada: '{title}' (ID: {result['id']})")
+        print(f"[SUCCESS] Folder created: '{title}' (ID: {result['id']})")
         self._folder_cache[cache_key] = result["id"]
-        # Pequeña pausa para evitar rate limiting en creaciones masivas
+        # Small pause to avoid rate limiting in mass creations
         time.sleep(0.3)
         return result["id"]
 
     def _sync_directory(self, dir_path, parent_id=None):
-        """Procesa un directorio recursivamente, creando la estructura de carpetas en Confluence."""
+        """Processes a directory recursively, creating the folder structure in Confluence."""
         abs_path = os.path.abspath(dir_path)
         rel_path = os.path.relpath(abs_path, os.getcwd())
 
-        # Determinar parent_id para esta carpeta
+        # Determine parent_id for this folder
         folder_parent = parent_id if parent_id is not None else self.parent_id
         if folder_parent:
             folder_parent = int(folder_parent)
 
-        # Crear/obtener la página de esta carpeta
+        # Create/obtain the page for this folder
         folder_title = os.path.basename(dir_path)
         try:
             folder_id = self._find_or_create_folder_page(folder_title, parent_id=folder_parent)
         except requests.exceptions.HTTPError as e:
-            print(f"[ERROR] Fallo al crear/obtener carpeta '{folder_title}': {e}")
+            print(f"[ERROR] Failed to create/obtain folder '{folder_title}': {e}")
             raise
 
-        # Recorrer contenido (ignorar ocultos y symlinks)
+        # Traverse content (ignore hidden and symlinks)
         items = sorted(os.listdir(dir_path))
         subdirs = [i for i in items
                    if not i.startswith('.')
@@ -318,123 +318,123 @@ class ConfluenceSync:
         total_items = len(subdirs) + len(files)
         current = 0
 
-        # Procesar subcarpetas primero (para que sus hijos tengan IDs)
+        # Process subfolders first (so their children have IDs)
         for subdir in subdirs:
             current += 1
             subdir_path = os.path.join(dir_path, subdir)
-            print(f"\n[{current}/{total_items}] Procesando subcarpeta: {subdir}")
+            print(f"\n[{current}/{total_items}] Processing subfolder: {subdir}")
             self._sync_directory(subdir_path, parent_id=folder_id)
 
-        # Procesar archivos .md
+        # Process .md files
         for f in files:
             current += 1
             file_path = os.path.join(dir_path, f)
-            print(f"\n[{current}/{total_items}] Procesando archivo: {f}")
+            print(f"\n[{current}/{total_items}] Processing file: {f}")
             self._sync_file(file_path, parent_id=folder_id)
 
     def _sync_file(self, file_path, parent_id=None):
-        """Sincroniza un archivo individual, con parent_id opcional."""
+        """Syncs an individual file, with optional parent_id."""
         page_title = self._extract_title(file_path)
 
         print(f"\n{'='*60}")
-        print(f"[INFO] Sincronizando archivo: {file_path}")
-        print(f"[INFO] Título: {page_title}")
+        print(f"[INFO] Syncing file: {file_path}")
+        print(f"[INFO] Title: {page_title}")
         print(f"{'='*60}")
 
-        # Leer metadatos del frontmatter
+        # Read frontmatter metadata
         metadata, _ = self._parse_frontmatter(file_path)
 
-        # Resolver confluence_id si existe en frontmatter
+        # Resolve confluence_id if it exists in frontmatter
         confluence_id = metadata.get("confluence_id")
 
-        # Resolver parent_id si existe en frontmatter (sobrescribe el heredado)
+        # Resolve parent_id if it exists in frontmatter (overrides the inherited one)
         frontmatter_parent_id = metadata.get("parent_id")
         if frontmatter_parent_id:
             parent_id = int(frontmatter_parent_id)
-            print(f"[INFO] Usando parent_id '{parent_id}' desde frontmatter.")
+            print(f"[INFO] Using parent_id '{parent_id}' from frontmatter.")
 
         html_content = self._md_to_html(file_path)
-        print(f"[INFO] Convirtiendo a HTML ({len(html_content)} chars)...")
+        print(f"[INFO] Converting to HTML ({len(html_content)} chars)...")
 
         if confluence_id:
-            print(f"[INFO] Usando confluence_id '{confluence_id}' desde frontmatter. Actualizando página específica...")
+            print(f"[INFO] Using confluence_id '{confluence_id}' from frontmatter. Updating specific page...")
             try:
                 page_url = urljoin(self.url, f"rest/api/content/{confluence_id}")
                 resp = self._request_with_retry("GET", page_url, params={"expand": "version,body.storage"})
                 page = resp.json()
                 result = self._update_page(page, html_content, title=page_title, parent_id=parent_id)
-                print(f"[SUCCESS] Página actualizada (ID: {confluence_id}): {result['_links']['base']}{result['_links']['webui']}")
+                print(f"[SUCCESS] Page updated (ID: {confluence_id}): {result['_links']['base']}{result['_links']['webui']}")
             except requests.exceptions.HTTPError as e:
                 if e.response.status_code == 404:
-                    print(f"[ERROR] No se encontró la página con ID '{confluence_id}'. Verifica que el ID sea correcto.")
+                    print(f"[ERROR] The page with ID '{confluence_id}' was not found. Verify that the ID is correct.")
                 else:
                     raise
         else:
-            print(f"[INFO] Buscando página '{page_title}' en espacio '{self.space_key}'...")
+            print(f"[INFO] Searching for page '{page_title}' in space '{self.space_key}'...")
             page = self._find_page(title=page_title, ancestor_id=parent_id)
 
             if page:
-                print(f"[INFO] Página encontrada (ID: {page['id']}). Actualizando...")
+                print(f"[INFO] Page found (ID: {page['id']}). Updating...")
                 result = self._update_page(page, html_content, title=page_title, parent_id=parent_id)
-                print(f"[SUCCESS] Página actualizada: {result['_links']['base']}{result['_links']['webui']}")
+                print(f"[SUCCESS] Page updated: {result['_links']['base']}{result['_links']['webui']}")
             else:
-                print(f"[INFO] Página no encontrada. Creando nueva...")
+                print(f"[INFO] Page not found. Creating new...")
                 result = self._create_page(html_content, title=page_title, parent_id=parent_id)
-                print(f"[SUCCESS] Página creada: {result['_links']['base']}{result['_links']['webui']}")
-        # Pequeña pausa para evitar rate limiting
+                print(f"[SUCCESS] Page created: {result['_links']['base']}{result['_links']['webui']}")
+        # Small pause to avoid rate limiting
         time.sleep(0.3)
 
     def run(self, path):
-        """Método principal: decide si sincronizar archivo o directorio."""
+        """Main method: decides whether to sync file or directory."""
         if not path:
-            print("[ERROR] No se especificó archivo ni directorio.")
+            print("[ERROR] No file or directory specified.")
             sys.exit(1)
         
         if os.path.isdir(path):
             self._sync_directory(path)
         elif os.path.isfile(path):
             if not path.lower().endswith('.md'):
-                print(f"[WARNING] El archivo '{path}' no es un .md. Se omitirá.")
+                print(f"[WARNING] The file '{path}' is not a .md. It will be skipped.")
                 return
             self._sync_file(path)
         else:
-            print(f"[ERROR] No se encuentra el path: {path}")
+            print(f"[ERROR] Path not found: {path}")
             sys.exit(1)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sync Markdown files or directories to Confluence")
-    parser.add_argument("paths", nargs="+", help="Archivos o carpetas Markdown a sincronizar")
-    parser.add_argument("--dry-run", action="store_true", help="Simula la ejecución sin crear ni actualizar páginas en Confluence")
+    parser.add_argument("paths", nargs="+", help="Markdown files or folders to sync")
+    parser.add_argument("--dry-run", action="store_true", help="Simulates the execution without creating or updating pages in Confluence")
     args = parser.parse_args()
 
     errors = []
-    # Crear una sola instancia para reutilizar la conexión
+    # Create a single instance to reuse the connection
     sync = ConfluenceSync(dry_run=args.dry_run)
     
     for path in args.paths:
         print(f"\n{'='*60}")
-        print(f"[INFO] Procesando: {path}")
+        print(f"[INFO] Processing: {path}")
         if args.dry_run:
-            print(f"[DRY-RUN] Modo simulación activado. No se realizarán cambios.")
+            print(f"[DRY-RUN] Simulation mode enabled. No changes will be made.")
         print(f"{'='*60}")
         try:
             if not os.path.exists(path):
-                print(f"[ERROR] No se encuentra el path: {path}")
+                print(f"[ERROR] Path not found: {path}")
                 errors.append(path)
                 continue
             sync.run(path)
         except requests.exceptions.HTTPError as e:
-            print(f"[ERROR] Error HTTP en '{path}': {e}")
+            print(f"[ERROR] HTTP error in '{path}': {e}")
             if e.response is not None:
-                print(f"[ERROR] Respuesta: {e.response.text}")
+                print(f"[ERROR] Response: {e.response.text}")
             errors.append(path)
         except Exception as e:
-            print(f"[ERROR] Error en '{path}': {e}")
+            print(f"[ERROR] Error in '{path}': {e}")
             errors.append(path)
 
     if errors:
-        print(f"\n[ERROR] Fallaron {len(errors)} path(s): {', '.join(errors)}")
+        print(f"\n[ERROR] {len(errors)} path(s) failed: {', '.join(errors)}")
         sys.exit(1)
     else:
-        print(f"\n[SUCCESS] Todos los paths procesados correctamente.")
+        print(f"\n[SUCCESS] All paths processed successfully.")

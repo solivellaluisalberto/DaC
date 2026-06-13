@@ -2,50 +2,50 @@
 set -e
 
 # ---------------------------------------------------------------------------
-# Entrypoint del Bitbucket Pipe: solivellaluis/confluence-sync
+# Entrypoint of the Bitbucket Pipe: solivellaluis/confluence-sync
 #
-# Variables de entorno requeridas:
-#   CONFLUENCE_URL        - URL base de Confluence
-#   CONFLUENCE_USER       - Email (Cloud) o usuario (Server)
-#   CONFLUENCE_API_TOKEN  - API Token (Cloud) o password (Server)
-#   CONFLUENCE_SPACE_KEY  - Clave del espacio (ej: PROY)
+# Required environment variables:
+#   CONFLUENCE_URL        - Confluence base URL
+#   CONFLUENCE_USER       - Email (Cloud) or username (Server)
+#   CONFLUENCE_API_TOKEN  - API Token (Cloud) or password (Server)
+#   CONFLUENCE_SPACE_KEY  - Space key (e.g., PROJ)
 #
-# Variables opcionales:
-#   CONFLUENCE_PARENT_ID  - ID de la página padre raíz
-#   FILES                 - Archivos/directorios a sincronizar (separados por espacio)
-#   DRY_RUN               - "true" para simular sin publicar cambios
+# Optional variables:
+#   CONFLUENCE_PARENT_ID  - Root parent page ID
+#   FILES                 - Files/directories to sync (space-separated)
+#   DRY_RUN               - "true" to simulate without publishing changes
 # ---------------------------------------------------------------------------
 
-# Detectar el directorio del workspace en distintas plataformas CI:
+# Detect the workspace directory across different CI platforms:
 #   - Bitbucket Pipelines: $BITBUCKET_CLONE_DIR
 #   - GitLab CI:           $CI_PROJECT_DIR
 #   - GitHub Actions:      $GITHUB_WORKSPACE
-# Fallback: directorio actual (ejecución local)
+# Fallback: current directory (local execution)
 WORKDIR="${BITBUCKET_CLONE_DIR:-${CI_PROJECT_DIR:-${GITHUB_WORKSPACE:-$(pwd)}}}"
 
 echo "[INFO] Workspace: $WORKDIR"
 cd "$WORKDIR"
 
-# Validar que se hayan indicado archivos/directorios a sincronizar
+# Validate that files/directories to sync have been provided
 if [ -z "$FILES" ]; then
-  echo "[ERROR] La variable FILES es obligatoria."
-  echo "[ERROR] Especifica los archivos o directorios a sincronizar separados por espacios."
-  echo "[ERROR] Ejemplo: FILES=\"README.md docs/ manual-usuario.md\""
+  echo "[ERROR] The FILES variable is required."
+  echo "[ERROR] Specify the files or directories to sync, separated by spaces."
+  echo "[ERROR] Example: FILES=\"README.md docs/ manual.md\""
   exit 1
 fi
 
-# Construir el flag --dry-run si corresponde
+# Build the --dry-run flag if applicable
 DRY_RUN_FLAG=""
 if [ "${DRY_RUN}" = "true" ]; then
   DRY_RUN_FLAG="--dry-run"
-  echo "[INFO] Modo DRY RUN activado. No se realizarán cambios en Confluence."
+  echo "[INFO] DRY RUN mode enabled. No changes will be made to Confluence."
 fi
 
-echo "[INFO] Archivos/directorios a sincronizar: $FILES"
-echo "[INFO] Iniciando sincronización con Confluence..."
+echo "[INFO] Files/directories to sync: $FILES"
+echo "[INFO] Starting sync with Confluence..."
 echo "------------------------------------------------------------"
 
-# Ejecutar el script de sincronización
-# $FILES se expande intencionalmente sin comillas para separar por palabras
+# Run the sync script
+# $FILES is intentionally unquoted to split by words
 # shellcheck disable=SC2086
 python /scripts/sync_to_confluence.py $FILES $DRY_RUN_FLAG
