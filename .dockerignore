@@ -1,0 +1,13 @@
+# Control de versiones
+.git
+.gitignore
+
+# Archivos del sistema
+.DS_Store
+
+# Archivos de configuración del pipe (no necesarios dentro de la imagen)
+bitbucket-pipelines.yml
+pipe.yml
+
+# Documentación
+*.md

@@ -1,0 +1,61 @@
+name: Confluence Sync
+image: solivellaluis/confluence-sync
+version: 1.0.0
+description: >
+  Sincroniza archivos Markdown con Confluence como pages.
+  Soporta archivos individuales y directorios completos (estructura jerárquica).
+  Compatible con Confluence Cloud y Data Center/Server.
+
+tags:
+  - confluence
+  - documentation
+  - markdown
+  - docs-as-code
+
+variables:
+  - name: CONFLUENCE_URL
+    description: >
+      URL base de Confluence.
+      Ejemplo Cloud: https://miempresa.atlassian.net/wiki
+      Ejemplo Server: https://confluence.miempresa.com
+    required: true
+
+  - name: CONFLUENCE_USER
+    description: >
+      Email del usuario para Confluence Cloud,
+      o nombre de usuario para Confluence Server/Data Center.
+    required: true
+
+  - name: CONFLUENCE_API_TOKEN
+    description: >
+      API Token de Confluence Cloud (generado en id.atlassian.com)
+      o contraseña para Confluence Server. Usar siempre como variable secreta.
+    required: true
+    secret: true
+
+  - name: CONFLUENCE_SPACE_KEY
+    description: >
+      Clave del espacio de Confluence donde se publicarán los documentos.
+      Ejemplo: PROY, DOCS, TEAM
+    required: true
+
+  - name: CONFLUENCE_PARENT_ID
+    description: >
+      ID de la página padre raíz en Confluence.
+      Todos los archivos y carpetas sincronizados colgarán de esta página.
+      Se puede obtener desde la URL de la página en Confluence.
+    required: false
+
+  - name: FILES
+    description: >
+      Lista de archivos .md y/o directorios a sincronizar, separados por espacios.
+      Los directorios se procesan de forma recursiva, creando la jerarquía de páginas.
+      Ejemplo: "README.md docs/ manual-usuario.md api-referencia.md"
+    required: true
+
+  - name: DRY_RUN
+    description: >
+      Si se establece en 'true', simula la ejecución sin crear ni actualizar
+      ninguna página en Confluence. Útil para validar configuración.
+    required: false
+    default: "false"
