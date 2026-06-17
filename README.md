@@ -15,6 +15,7 @@ When you run this Docker image, it reads the `.md` files from your repository, c
 - **Individual files** → creates or updates them as Confluence pages.
 - **Directories** → builds the full folder hierarchy in Confluence (each folder becomes a parent page, each `.md` file becomes a child page).
 - **YAML frontmatter** → supports `page_title` (custom title) and `confluence_id` (update a specific existing page by ID).
+- **Mermaid diagrams** → automatically rendered as PNG images and attached to the Confluence page.
 - **Rate limiting** → automatic retries with exponential backoff on HTTP 429.
 
 ---
@@ -37,8 +38,17 @@ When you run this Docker image, it reads the `.md` files from your repository, c
 |----------|-------------|---------|
 | `CONFLUENCE_PARENT_ID` | Root parent page ID in Confluence | — |
 | `DRY_RUN` | `true` to simulate without publishing changes | `false` |
+| `MERMAID_SHOW_SOURCE` | `true` to show the original Mermaid code in an expandable block below each diagram | `true` |
 
 ---
+
+## Docker Image Tags
+
+| Tag | Branch | Description |
+|-----|--------|-------------|
+| `latest` | `main` | Stable release |
+| `develop` | `develop` | Latest development build |
+| `<run_number>` | `main` | Specific build from the `main` branch |
 
 ## Platform Usage
 
@@ -134,6 +144,26 @@ parent_id: "123456"
 
 ---
 
+## Mermaid Diagrams
+
+Mermaid code blocks are automatically detected, rendered as PNG images via [mermaid.ink](https://mermaid.ink), and uploaded as attachments to the Confluence page.
+
+Simply write your diagrams as usual in Markdown:
+
+````markdown
+```mermaid
+graph TD
+    A[Start] --> B{Is it working?}
+    B -->|Yes| C[Great!]
+    B -->|No| D[Debug]
+    D --> B
+```
+````
+
+> **Note:** The rendering is done via the external mermaid.ink service. Diagrams are sent over the internet for rendering. If a diagram fails to render, it will fallback to a plain code block in Confluence.
+
+---
+
 ## Local Build
 
 ```bash
@@ -183,7 +213,7 @@ Contributions are welcome. If you want to improve the script, add new features, 
 | `pipe.sh` | Entrypoint that detects the workspace (Bitbucket/GitLab/GitHub) and runs the script |
 | `sync_to_confluence.py` | Main sync script: converts Markdown to HTML, creates/updates Confluence pages |
 | `pipe.yml` | Pipe metadata for Bitbucket Pipelines (variable documentation) |
-| `docker-publish.yml` | GitHub Actions workflow that builds and publishes the image to Docker Hub |
+| `docker-publish.yml` | GitHub Actions workflow that builds and publishes the image to Docker Hub on `main` (`latest`) and `develop` (`develop`) |
 
 ---
 
