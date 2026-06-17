@@ -38,6 +38,7 @@ When you run this Docker image, it reads the `.md` files from your repository, c
 |----------|-------------|---------|
 | `CONFLUENCE_PARENT_ID` | Root parent page ID in Confluence | — |
 | `DRY_RUN` | `true` to simulate without publishing changes | `false` |
+| `MERMAID_SHOW_SOURCE` | `true` to show the original Mermaid code in an expandable block below each diagram | `true` |
 
 ---
 

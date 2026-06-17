@@ -47,6 +47,7 @@ class ConfluenceSync:
         self.space_key = os.environ.get("CONFLUENCE_SPACE_KEY", "")
         self.parent_id = os.environ.get("CONFLUENCE_PARENT_ID", "")
         self.dry_run = dry_run
+        self.mermaid_show_source = os.environ.get("MERMAID_SHOW_SOURCE", "true").lower() in ("1", "true", "yes")
         self._folder_cache = {}  # relative_path -> confluence_id
 
         self._validate_config()
@@ -240,11 +241,29 @@ class ConfluenceSync:
                 image_data = self._fetch_mermaid_image(encoded)
                 self._upload_attachment(page_id, filename, image_data, comment="Auto-generated Mermaid diagram")
                 print(f"[INFO] Mermaid diagram uploaded: {filename}")
-                return (
+
+                image_macro = (
                     f'<ac:image ac:alt="Mermaid diagram">'
                     f'<ri:attachment ri:filename="{filename}" />'
                     f'</ac:image>'
                 )
+
+                if not self.mermaid_show_source:
+                    return image_macro
+
+                escaped = code_text.replace("]]>", "]]]]><![CDATA[>")
+                expand_macro = (
+                    f'<ac:structured-macro ac:name="expand">'
+                    f'<ac:parameter ac:name="title">Código fuente</ac:parameter>'
+                    f'<ac:rich-text-body>'
+                    f'<ac:structured-macro ac:name="code">'
+                    f'<ac:parameter ac:name="language">mermaid</ac:parameter>'
+                    f'<ac:plain-text-body><![CDATA[{escaped}]]></ac:plain-text-body>'
+                    f'</ac:structured-macro>'
+                    f'</ac:rich-text-body>'
+                    f'</ac:structured-macro>'
+                )
+                return image_macro + expand_macro
             except Exception as e:
                 print(f"[WARNING] Failed to render Mermaid diagram ({filename}): {e}")
                 # Fallback: render as a Confluence code block
