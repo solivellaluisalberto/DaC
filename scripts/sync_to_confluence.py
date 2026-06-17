@@ -201,52 +201,43 @@ class ConfluenceSync:
         return resp.content
 
     def _upload_attachment(self, page_id, filename, image_data, comment="Mermaid diagram"):
-        """Uploads or updates an image attachment on a Confluence page."""
+        """Uploads an image attachment to a Confluence page.
+
+        If an attachment with the same filename already exists, it is deleted
+        first so the new one can be created cleanly.
+        """
         if self.dry_run:
             return {"id": "dry-run"}
 
         # Check if attachment already exists on this page
         search_url = urljoin(self.url, f"rest/api/content/{page_id}/child/attachment")
-        params = {"filename": filename, "expand": "version"}
+        params = {"filename": filename}
         resp = requests.get(search_url, auth=(self.user, self.token), params=params)
-        existing = None
         if resp.status_code == 200:
             results = resp.json().get("results", [])
             if results:
-                existing = results[0]
-                print(f"[INFO] Existing attachment found: '{filename}' (ID: {existing['id']})")
+                existing_id = results[0]["id"]
+                print(f"[INFO] Existing attachment found: '{filename}' (ID: {existing_id}). Deleting...")
+                delete_url = urljoin(self.url, f"rest/api/content/{existing_id}")
+                del_resp = requests.delete(delete_url, auth=(self.user, self.token))
+                if del_resp.status_code in (200, 204):
+                    print(f"[INFO] Existing attachment deleted: '{filename}'")
+                else:
+                    print(f"[WARNING] Could not delete existing attachment '{filename}' (status: {del_resp.status_code})")
 
+        # Create new attachment
         headers = {"X-Atlassian-Token": "no-check"}
         files = {"file": (filename, image_data, "image/png")}
-
-        if existing:
-            # Update existing attachment
-            attachment_id = existing["id"]
-            version = existing["version"]["number"]
-            update_url = urljoin(self.url, f"rest/api/content/{attachment_id}/data")
-            data = {"comment": comment, "version": version + 1}
-            resp = requests.post(
-                update_url,
-                auth=(self.user, self.token),
-                headers=headers,
-                files=files,
-                data=data,
-            )
-            resp.raise_for_status()
-            print(f"[INFO] Attachment updated: '{filename}'")
-        else:
-            # Create new attachment
-            data = {"comment": comment}
-            resp = requests.post(
-                search_url,
-                auth=(self.user, self.token),
-                headers=headers,
-                files=files,
-                data=data,
-            )
-            resp.raise_for_status()
-            print(f"[INFO] Attachment created: '{filename}'")
-
+        data = {"comment": comment}
+        resp = requests.post(
+            search_url,
+            auth=(self.user, self.token),
+            headers=headers,
+            files=files,
+            data=data,
+        )
+        resp.raise_for_status()
+        print(f"[INFO] Attachment uploaded: '{filename}'")
         return resp.json()
 
     def _convert_mermaid_blocks(self, html_content, page_id):
