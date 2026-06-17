@@ -24,6 +24,8 @@ Optional:
 """
 
 import argparse
+import base64
+import hashlib
 import os
 import sys
 import re
@@ -32,6 +34,7 @@ import html
 import markdown
 import requests
 import yaml
+import zlib
 from urllib.parse import urljoin
 
 
@@ -145,9 +148,13 @@ class ConfluenceSync:
         print(f"[INFO] Confluence connection OK. Space '{self.space_key}' verified.")
 
     def _convert_code_blocks(self, html_content):
-        """Converts <pre><code> blocks to Confluence 'code' macro."""
+        """Converts <pre><code> blocks to Confluence 'code' macro.
+        Skips 'mermaid' blocks so they can be rendered as images later."""
         def replace_code(match):
             lang = match.group(1) or ""
+            if lang == "mermaid":
+                # Leave intact for _convert_mermaid_blocks to process later
+                return match.group(0)
             code_text = match.group(2)
             # Unescape HTML entities so they look good in Confluence
             code_text = html.unescape(code_text)
@@ -163,6 +170,79 @@ class ConfluenceSync:
         # Replace all <pre><code class="language-xxx">...</code></pre> blocks
         pattern = r'<pre><code(?: class="language-([^"]*)")?>(.*?)</code></pre>'
         return re.sub(pattern, replace_code, html_content, flags=re.DOTALL)
+
+    def _encode_mermaid_for_ink(self, diagram_source):
+        """Encodes Mermaid diagram source for mermaid.ink API using pako deflate + base64url."""
+        compressed = zlib.compress(diagram_source.encode("utf-8"), level=9)
+        # Remove zlib 2-byte header and 4-byte adler32 footer to get raw deflate
+        raw_deflate = compressed[2:-4]
+        encoded = base64.urlsafe_b64encode(raw_deflate).decode("ascii")
+        return f"pako:{encoded}"
+
+    def _fetch_mermaid_image(self, encoded_diagram):
+        """Fetches a PNG image from mermaid.ink for the encoded diagram."""
+        url = f"https://mermaid.ink/img/{encoded_diagram}?type=png&bgColor=!white"
+        resp = requests.get(url, timeout=30)
+        resp.raise_for_status()
+        return resp.content
+
+    def _upload_attachment(self, page_id, filename, image_data, comment="Mermaid diagram"):
+        """Uploads an image as an attachment to a Confluence page."""
+        if self.dry_run:
+            return {"id": "dry-run"}
+        url = urljoin(self.url, f"rest/api/content/{page_id}/child/attachment")
+        files = {"file": (filename, image_data, "image/png")}
+        data = {"comment": comment}
+        headers = {"X-Atlassian-Token": "no-check"}
+        # Use a direct request to avoid session-level Content-Type: application/json
+        resp = requests.post(url, auth=(self.user, self.token), headers=headers, files=files, data=data)
+        resp.raise_for_status()
+        return resp.json()
+
+    def _convert_mermaid_blocks(self, html_content, page_id):
+        """Finds <pre><code class="language-mermaid"> blocks and replaces them with Confluence images."""
+        if not page_id or page_id == "dry-run":
+            return html_content
+
+        def replace_mermaid(match):
+            code_text = match.group(1)
+            # Unescape HTML entities from markdown conversion
+            code_text = html.unescape(code_text)
+
+            diagram_hash = hashlib.sha256(code_text.encode("utf-8")).hexdigest()[:12]
+            filename = f"mermaid_{diagram_hash}.png"
+
+            if self.dry_run:
+                print(f"[DRY-RUN] Would generate Mermaid image: {filename}")
+                return (
+                    f'<ac:image ac:alt="Mermaid diagram">'
+                    f'<ri:attachment ri:filename="{filename}" />'
+                    f'</ac:image>'
+                )
+
+            try:
+                encoded = self._encode_mermaid_for_ink(code_text)
+                image_data = self._fetch_mermaid_image(encoded)
+                self._upload_attachment(page_id, filename, image_data, comment="Auto-generated Mermaid diagram")
+                print(f"[INFO] Mermaid diagram uploaded: {filename}")
+                return (
+                    f'<ac:image ac:alt="Mermaid diagram">'
+                    f'<ri:attachment ri:filename="{filename}" />'
+                    f'</ac:image>'
+                )
+            except Exception as e:
+                print(f"[WARNING] Failed to render Mermaid diagram ({filename}): {e}")
+                # Fallback: render as a Confluence code block
+                escaped = code_text.replace("]]>", "]]]]><![CDATA[>")
+                return (
+                    f'<ac:structured-macro ac:name="code">'
+                    f'<ac:parameter ac:name="language">mermaid</ac:parameter>'
+                    f'<ac:plain-text-body><![CDATA[{escaped}]]></ac:plain-text-body>'
+                    f'</ac:structured-macro>'
+                )
+
+        pattern = r'<pre><code class="language-mermaid">(.*?)</code></pre>'
+        return re.sub(pattern, replace_mermaid, html_content, flags=re.DOTALL)
 
     def _md_to_html(self, md_file):
         with open(md_file, "r", encoding="utf-8") as f:
@@ -356,31 +436,41 @@ class ConfluenceSync:
         html_content = self._md_to_html(file_path)
         print(f"[INFO] Converting to HTML ({len(html_content)} chars)...")
 
+        # Obtain the page (existing or new) so we have a page_id for attachments
+        page = None
+        is_new_page = False
+
         if confluence_id:
-            print(f"[INFO] Using confluence_id '{confluence_id}' from frontmatter. Updating specific page...")
+            print(f"[INFO] Using confluence_id '{confluence_id}' from frontmatter.")
             try:
                 page_url = urljoin(self.url, f"rest/api/content/{confluence_id}")
                 resp = self._request_with_retry("GET", page_url, params={"expand": "version,body.storage"})
                 page = resp.json()
-                result = self._update_page(page, html_content, title=page_title, parent_id=parent_id)
-                print(f"[SUCCESS] Page updated (ID: {confluence_id}): {result['_links']['base']}{result['_links']['webui']}")
             except requests.exceptions.HTTPError as e:
                 if e.response.status_code == 404:
                     print(f"[ERROR] The page with ID '{confluence_id}' was not found. Verify that the ID is correct.")
-                else:
-                    raise
+                    return
+                raise
         else:
             print(f"[INFO] Searching for page '{page_title}' in space '{self.space_key}'...")
             page = self._find_page(title=page_title, ancestor_id=parent_id)
-
-            if page:
-                print(f"[INFO] Page found (ID: {page['id']}). Updating...")
-                result = self._update_page(page, html_content, title=page_title, parent_id=parent_id)
-                print(f"[SUCCESS] Page updated: {result['_links']['base']}{result['_links']['webui']}")
-            else:
+            if not page:
                 print(f"[INFO] Page not found. Creating new...")
-                result = self._create_page(html_content, title=page_title, parent_id=parent_id)
-                print(f"[SUCCESS] Page created: {result['_links']['base']}{result['_links']['webui']}")
+                placeholder = "<div><p>Initializing page content...</p></div>"
+                page = self._create_page(placeholder, title=page_title, parent_id=parent_id)
+                is_new_page = True
+                print(f"[INFO] Page created (ID: {page['id']}). Processing content...")
+
+        page_id = page["id"]
+
+        # Convert Mermaid blocks to images and upload them as attachments
+        final_html = self._convert_mermaid_blocks(html_content, page_id)
+
+        # Update the page with the final HTML (images reference attachments by filename)
+        result = self._update_page(page, final_html, title=page_title, parent_id=parent_id)
+        action = "created" if is_new_page else "updated"
+        print(f"[SUCCESS] Page {action}: {result['_links']['base']}{result['_links']['webui']}")
+
         # Small pause to avoid rate limiting
         time.sleep(0.3)
 

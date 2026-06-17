@@ -15,6 +15,7 @@ When you run this Docker image, it reads the `.md` files from your repository, c
 - **Individual files** → creates or updates them as Confluence pages.
 - **Directories** → builds the full folder hierarchy in Confluence (each folder becomes a parent page, each `.md` file becomes a child page).
 - **YAML frontmatter** → supports `page_title` (custom title) and `confluence_id` (update a specific existing page by ID).
+- **Mermaid diagrams** → automatically rendered as PNG images and attached to the Confluence page.
 - **Rate limiting** → automatic retries with exponential backoff on HTTP 429.
 
 ---
@@ -139,6 +140,26 @@ parent_id: "123456"
 | `page_title` | Page title in Confluence (if not set, uses the first `# H1`) |
 | `confluence_id` | If present, updates the page with that exact ID (skips search by title) |
 | `parent_id` | If present, overrides the inherited parent page ID for this specific file |
+
+---
+
+## Mermaid Diagrams
+
+Mermaid code blocks are automatically detected, rendered as PNG images via [mermaid.ink](https://mermaid.ink), and uploaded as attachments to the Confluence page.
+
+Simply write your diagrams as usual in Markdown:
+
+````markdown
+```mermaid
+graph TD
+    A[Start] --> B{Is it working?}
+    B -->|Yes| C[Great!]
+    B -->|No| D[Debug]
+    D --> B
+```
+````
+
+> **Note:** The rendering is done via the external mermaid.ink service. Diagrams are sent over the internet for rendering. If a diagram fails to render, it will fallback to a plain code block in Confluence.
 
 ---
 
