@@ -40,6 +40,14 @@ When you run this Docker image, it reads the `.md` files from your repository, c
 
 ---
 
+## Docker Image Tags
+
+| Tag | Branch | Description |
+|-----|--------|-------------|
+| `latest` | `main` | Stable release |
+| `develop` | `develop` | Latest development build |
+| `<run_number>` | `main` | Specific build from the `main` branch |
+
 ## Platform Usage
 
 ### Bitbucket Pipelines
@@ -183,7 +191,7 @@ Contributions are welcome. If you want to improve the script, add new features, 
 | `pipe.sh` | Entrypoint that detects the workspace (Bitbucket/GitLab/GitHub) and runs the script |
 | `sync_to_confluence.py` | Main sync script: converts Markdown to HTML, creates/updates Confluence pages |
 | `pipe.yml` | Pipe metadata for Bitbucket Pipelines (variable documentation) |
-| `docker-publish.yml` | GitHub Actions workflow that builds and publishes the image to Docker Hub |
+| `docker-publish.yml` | GitHub Actions workflow that builds and publishes the image to Docker Hub on `main` (`latest`) and `develop` (`develop`) |
 
 ---
 

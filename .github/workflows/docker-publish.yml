@@ -16,8 +16,19 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Set Docker tag
+        id: tag
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "tags=solivellaluis/confluence-sync:latest,solivellaluis/confluence-sync:${{ github.run_number }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" = "refs/heads/develop" ]; then
+            echo "tags=solivellaluis/confluence-sync:develop" >> $GITHUB_OUTPUT
+          else
+            echo "tags=" >> $GITHUB_OUTPUT
+          fi
+
       - name: Login to Docker Hub
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && github.event_name == 'push'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -27,19 +38,16 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
-          tags: |
-            solivellaluis/confluence-sync:latest
-            solivellaluis/confluence-sync:${{ github.run_number }}
+          push: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && github.event_name == 'push' }}
+          tags: ${{ steps.tag.outputs.tags }}
 
       - name: Output image tags
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && github.event_name == 'push'
         run: |
           echo "✅ Imagen publicada:"
-          echo "   solivellaluis/confluence-sync:latest"
-          echo "   solivellaluis/confluence-sync:${{ github.run_number }}"
+          echo "   ${{ steps.tag.outputs.tags }}"
 
       - name: Build only (no push)
-        if: github.ref != 'refs/heads/main' || github.event_name != 'push'
+        if: (github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop') || github.event_name != 'push'
         run: |
           echo "🔧 Modo validación: imagen compilada pero no publicada"
