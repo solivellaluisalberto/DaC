@@ -26,6 +26,7 @@ Optional:
 import argparse
 import base64
 import hashlib
+import json
 import os
 import sys
 import re
@@ -172,11 +173,23 @@ class ConfluenceSync:
         return re.sub(pattern, replace_code, html_content, flags=re.DOTALL)
 
     def _encode_mermaid_for_ink(self, diagram_source):
-        """Encodes Mermaid diagram source for mermaid.ink API using pako deflate + base64url."""
-        compressed = zlib.compress(diagram_source.encode("utf-8"), level=9)
-        # Remove zlib 2-byte header and 4-byte adler32 footer to get raw deflate
-        raw_deflate = compressed[2:-4]
-        encoded = base64.urlsafe_b64encode(raw_deflate).decode("ascii")
+        """Encodes Mermaid diagram source for mermaid.ink API.
+
+        mermaid.ink expects a JSON payload with editor state, compressed with
+        full zlib (header + data + adler32) and base64url-encoded without padding.
+        """
+        payload = json.dumps(
+            {
+                "code": diagram_source,
+                "mermaid": '{\n  "theme": "default"\n}',
+                "updateEditor": True,
+                "autoSync": True,
+                "updateDiagram": True,
+            },
+            separators=(",", ":"),
+        )
+        compressed = zlib.compress(payload.encode("utf-8"), level=9)
+        encoded = base64.urlsafe_b64encode(compressed).decode("ascii").rstrip("=")
         return f"pako:{encoded}"
 
     def _fetch_mermaid_image(self, encoded_diagram):
@@ -207,7 +220,7 @@ class ConfluenceSync:
         def replace_mermaid(match):
             code_text = match.group(1)
             # Unescape HTML entities from markdown conversion
-            code_text = html.unescape(code_text)
+            code_text = html.unescape(code_text).strip()
 
             diagram_hash = hashlib.sha256(code_text.encode("utf-8")).hexdigest()[:12]
             filename = f"mermaid_{diagram_hash}.png"
@@ -222,6 +235,8 @@ class ConfluenceSync:
 
             try:
                 encoded = self._encode_mermaid_for_ink(code_text)
+                image_url = f"https://mermaid.ink/img/{encoded}?type=png&bgColor=!white"
+                print(f"[DEBUG] Rendering Mermaid diagram: {image_url}")
                 image_data = self._fetch_mermaid_image(encoded)
                 self._upload_attachment(page_id, filename, image_data, comment="Auto-generated Mermaid diagram")
                 print(f"[INFO] Mermaid diagram uploaded: {filename}")
